@@ -1,0 +1,17 @@
+{
+  "name": "node",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:cjs": "tsc -p ./build/tsconfig.cjs.json",
+    "build": "pnpm run build:cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "gdb": "workspace:^1.0.0",
+    "source-map": "^0.7.4"
+  }
+}
