@@ -20,6 +20,14 @@ importers:
     dependencies:
       '@gdb/node': link:../../packages/node
 
+  packages/browser:
+    specifiers:
+      gdb: workspace:^1.0.0
+      source-map: ^0.7.4
+    dependencies:
+      gdb: link:../gdb
+      source-map: registry.npmmirror.com/source-map/0.7.4
+
   packages/gdb:
     specifiers:
       source-map: ^0.7.4

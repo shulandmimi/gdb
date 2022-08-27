@@ -1,0 +1,194 @@
+import * as GDB from 'gdb';
+import { BasicSourceMapConsumer, IndexedSourceMapConsumer, SourceMapConsumer } from 'source-map';
+
+// @ts-ignore
+SourceMapConsumer.initialize({
+    'lib/mappings.wasm': 'https://unpkg.com/source-map@0.7.3/lib/mappings.wasm',
+});
+
+class BrowserStackParser extends GDB.StackParser {
+    rawStack: string;
+
+    constructor(stack: string, public offset = 1) {
+        super();
+        this.rawStack = stack;
+    }
+
+    parse(): GDB.StackLine[] {
+        const rawStack = this.rawStack;
+        let stackLines = rawStack.split('\n');
+
+        stackLines.shift();
+
+        stackLines = stackLines.slice(this.offset);
+
+        const datas = stackLines.map((lineItem) => {
+            lineItem = lineItem.slice(lineItem.indexOf('at') + 2).trim();
+            const nullMatch: GDB.StackNullLine = {
+                type: 'null',
+                from: lineItem,
+            };
+            // 在某个作用域中执行时
+            if (/\(.*\)/.test(lineItem)) {
+                const matchs = lineItem.match(/^([a-zA-Z$_][\.\<\>a-zA-Z$_]*)\s\((.+):([0-9]+):([0-9]+)\)$/);
+
+                if (!matchs) return nullMatch;
+
+                const [, scope_name, filename, line, col] = matchs;
+
+                const end = filename.indexOf('?');
+
+                return {
+                    type: 'match',
+                    scope: scope_name,
+                    filename: end !== -1 ? filename.slice(0, end) : filename,
+                    position: {
+                        line: Number(line),
+                        col: Number(col),
+                    },
+                } as GDB.StackMatchWithPosition;
+            } else {
+                const matchs = lineItem.match(/^(<[a-zA-Z]+>):([0-9]+):([0-9]+)$/);
+
+                if (!matchs) return nullMatch;
+
+                const [filename, line, col] = matchs;
+
+                const end = filename.indexOf('?');
+                return {
+                    type: 'match',
+                    scope: '',
+                    filename: end !== -1 ? filename.slice(0, end) : filename,
+                    position: {
+                        line: Number(line),
+                        col: Number(col),
+                    },
+                } as GDB.StackMatchWithPosition;
+            }
+        });
+
+        return datas;
+    }
+}
+
+const origin = location.origin;
+
+class BrowserSourceStackManager extends GDB.SourceStackManagerWithCache {
+    async sourceMap(): Promise<string | undefined> {
+        if (this.cache.has(this.stackLine.filename)) return this.cache.get(this.stackLine.filename);
+        const sourceMap = await fetch(this.stackLine.filename + '.map')
+            .then((res) => res.text())
+            .catch(() => undefined);
+
+        if (!sourceMap) return;
+
+        this.cache.set(this.stackLine.filename, sourceMap);
+
+        return sourceMap;
+    }
+
+    async translate(position: GDB.Position): Promise<GDB.LineSource> {
+        const sourcemap = await this.sourceMap();
+
+        if (!sourcemap) return { type: 'real', position, filename: this.stackLine.filename };
+
+        const consumer: BasicSourceMapConsumer | IndexedSourceMapConsumer = this.cache.has('sourceMapConsumer')
+            ? this.cache.get('sourceMapConsumer')
+            : await new Promise(async (resolve) => {
+                  SourceMapConsumer.with(sourcemap, null, (consumer) => {
+                      this.cache.set('sourceMapConsumer', consumer);
+                      resolve(consumer);
+                  });
+              });
+
+        const { source, line, column } = consumer.originalPositionFor({
+            line: position.line,
+            column: position.col,
+        });
+
+        return {
+            type: 'real',
+            position: {
+                line: line!,
+                col: column!,
+            },
+            filename: source!,
+        };
+    }
+}
+
+if (location.protocol.startsWith('file::')) {
+    throw new Error('not supoort file protocol, please change your protocol');
+}
+
+class BrowserStackAdapter extends GDB.StackAdapter {
+    StackParser = BrowserStackParser;
+
+    SourceStackManager = BrowserSourceStackManager;
+
+    async fetchStack(stack: string, offset: number): Promise<GDB.StackLine[]> {
+        const stackParser = new this.StackParser(stack, offset);
+
+        const stacks = stackParser.parse();
+
+        const realStackLines = await Promise.all(
+            stacks.map((stack) => {
+                if (stack.type === 'null') return stack;
+                if (!this.managerMapCache.has(stack.filename)) {
+                    this.managerMapCache.set(stack.filename, new BrowserSourceStackManager(stack));
+                }
+
+                const manager = this.managerMapCache.get(stack.filename)!;
+
+                return manager.translate(stack.position);
+            })
+        );
+
+        const targetStacks: GDB.StackLine[] = stacks.map((item, index) => {
+            if (item.type === 'null') {
+                return item;
+            }
+            return {
+                ...item,
+                filename: (<GDB.RealSource>realStackLines[index]).filename,
+                position: (<GDB.RealSource>realStackLines[index]).position,
+            };
+        });
+
+        return targetStacks.filter((item) => {
+            return (item.type === 'match' ? item.filename : item.from).indexOf('node_modules') === -1;
+        });
+    }
+
+    format(stackLines: GDB.StackLine[]): string | undefined {
+        return stackLines
+            .map((item) => {
+                switch (item.type) {
+                    case 'match':
+                        return `${item.scope} ${item.filename}:${item.position.line}:${item.position.col}`;
+                    case 'null':
+                        return `${item.from}`;
+                    default:
+                        return '';
+                }
+            })
+            .join('\n');
+    }
+}
+
+/**
+ * @todo
+ * 1. sourcemap 深度
+ * 2. 路径恢复 `origin: aa/bb/cc/` `target: ../../../abc` ==> `location:xxx/abc`
+ */
+const gdb = new GDB.Gdb({
+    stackAdapter: new BrowserStackAdapter(),
+});
+
+// gdb.log('123');
+
+// gdb.log('234');
+
+const log = gdb.log.bind(gdb);
+
+export default log;

@@ -1,9 +1,9 @@
 {
-  "name": "gdb",
+  "name": "@gdb/browser",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/cjs/index.js",
-  "types": "dist/cjs/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
   "scripts": {
     "build:cjs": "tsc -p ./build/tsconfig.cjs.json",
     "build:mjs": "tsc -p ./build/tsconfig.mjs.json",
@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "gdb": "workspace:^1.0.0",
     "source-map": "^0.7.4"
   }
 }
