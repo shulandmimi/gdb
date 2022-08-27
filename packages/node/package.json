@@ -1,8 +1,9 @@
 {
-  "name": "node",
+  "name": "@gdb/node",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/",
   "scripts": {
     "build:cjs": "tsc -p ./build/tsconfig.cjs.json",
     "build": "pnpm run build:cjs"

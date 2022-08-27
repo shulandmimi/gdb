@@ -14,6 +14,12 @@ importers:
       ts-node: registry.npmmirror.com/ts-node/10.9.1_hwinnrf7y5nyyzygpj45jmvjia
       typescript: registry.npmmirror.com/typescript/4.8.2
 
+  examples/node:
+    specifiers:
+      '@gdb/node': workspace:^1.0.0
+    dependencies:
+      '@gdb/node': link:../../packages/node
+
   packages/gdb:
     specifiers:
       source-map: ^0.7.4

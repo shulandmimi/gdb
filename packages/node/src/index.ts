@@ -208,30 +208,3 @@ const gdb = new Gdb({
 const log = gdb.log.bind(gdb);
 
 export default log;
-
-log('1');
-
-gdb.log(123);
-
-log('2');
-
-gdb.log('3');
-
-log('4');
-
-function log_wrapper() {
-    gdb.log('5 in scope');
-}
-log_wrapper();
-
-setTimeout(() => {
-    log('in settimeout');
-}, 1000);
-
-function setTimeoutScope() {
-    setTimeout(() => {
-        log('in settimeout and scope');
-    }, 1000);
-}
-
-setTimeoutScope();
