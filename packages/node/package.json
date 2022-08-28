@@ -6,7 +6,8 @@
   "types": "./dist/cjs/",
   "scripts": {
     "build:cjs": "tsc -p ./build/tsconfig.cjs.json",
-    "build": "pnpm run build:cjs"
+    "build:mjs": "tsc -p ./build/tsconfig.mjs.json",
+    "build": "pnpm run build:cjs && pnpm run build:mjs"
   },
   "keywords": [],
   "author": "",

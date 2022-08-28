@@ -70,7 +70,7 @@ const Gdb = (function wrapper() {
             }
         }
 
-        extend(options: Partial<GDBOptions>) {
+        extend(options: Partial<GDBOptions>): Gdb {
             return new Gdb({ ...this.options, ...options });
         }
     }
@@ -80,10 +80,8 @@ const Gdb = (function wrapper() {
     return Gdb;
 })();
 
-const gdb = new Gdb({});
+// const gdb = new Gdb({});
 
-const log = gdb.log.bind(gdb);
+// export { Gdb };
 
-export { Gdb };
-
-export default log;
+export default Gdb;

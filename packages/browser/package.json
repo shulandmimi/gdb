@@ -4,6 +4,7 @@
   "description": "",
   "main": "./dist/cjs/index.js",
   "types": "./dist/cjs/index.d.ts",
+  "module": "./dist/mjs",
   "scripts": {
     "build:cjs": "tsc -p ./build/tsconfig.cjs.json",
     "build:mjs": "tsc -p ./build/tsconfig.mjs.json",

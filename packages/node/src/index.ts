@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import {
-    Gdb,
+import Gdb, {
     Position,
     RealSource,
     SourceStackManagerWithCache,
@@ -206,5 +205,7 @@ const gdb = new Gdb({
 });
 
 const log = gdb.log.bind(gdb);
+
+export const extend = gdb.extend;
 
 export default log;

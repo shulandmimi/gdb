@@ -1,3 +1,4 @@
+import Gdb from 'gdb';
 import * as GDB from 'gdb';
 import { BasicSourceMapConsumer, IndexedSourceMapConsumer, SourceMapConsumer } from 'source-map';
 
@@ -181,13 +182,9 @@ class BrowserStackAdapter extends GDB.StackAdapter {
  * 1. sourcemap 深度
  * 2. 路径恢复 `origin: aa/bb/cc/` `target: ../../../abc` ==> `location:xxx/abc`
  */
-const gdb = new GDB.Gdb({
+const gdb = new GDB.default({
     stackAdapter: new BrowserStackAdapter(),
 });
-
-// gdb.log('123');
-
-// gdb.log('234');
 
 const log = gdb.log.bind(gdb);
 
