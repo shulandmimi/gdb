@@ -47,13 +47,14 @@ class BrowserStackParser extends GDB.StackParser {
                         line: Number(line),
                         col: Number(col),
                     },
+                    realFilename: end !== -1 ? filename.slice(0, end) : filename,
                 } as GDB.StackMatchWithPosition;
             } else {
-                const matchs = lineItem.match(/^(<[a-zA-Z]+>):([0-9]+):([0-9]+)$/);
+                const matchs = lineItem.match(/^([a-zA-Z0-9@/:\.\-]*):([0-9]+):([0-9]+)$/);
 
                 if (!matchs) return nullMatch;
 
-                const [filename, line, col] = matchs;
+                const [, filename, line, col] = matchs;
 
                 const end = filename.indexOf('?');
                 return {
@@ -64,6 +65,7 @@ class BrowserStackParser extends GDB.StackParser {
                         line: Number(line),
                         col: Number(col),
                     },
+                    realFilename: end !== -1 ? filename.slice(0, end) : filename,
                 } as GDB.StackMatchWithPosition;
             }
         });
@@ -72,16 +74,21 @@ class BrowserStackParser extends GDB.StackParser {
     }
 }
 
-const origin = location.origin;
+const pageCurrentOrigin = location.origin;
 
 class BrowserSourceStackManager extends GDB.SourceStackManagerWithCache {
     async sourceMap(): Promise<string | undefined> {
+        if (this.failed) return;
         if (this.cache.has(this.stackLine.filename)) return this.cache.get(this.stackLine.filename);
-        const sourceMap = await fetch(this.stackLine.filename + '.map')
-            .then((res) => res.text())
-            .catch(() => undefined);
+        const sourceMap = await fetch(this.stackLine.filename + '.map').then(
+            (res) => res.text(),
+            () => ((this.failed = true), '')
+        );
 
-        if (!sourceMap) return;
+        if (!sourceMap) {
+            this.failed = true;
+            return;
+        }
 
         this.cache.set(this.stackLine.filename, sourceMap);
 
@@ -91,7 +98,7 @@ class BrowserSourceStackManager extends GDB.SourceStackManagerWithCache {
     async translate(position: GDB.Position): Promise<GDB.LineSource> {
         const sourcemap = await this.sourceMap();
 
-        if (!sourcemap) return { type: 'real', position, filename: this.stackLine.filename };
+        if (!sourcemap) return { type: 'null', from: this.stackLine.filename };
 
         const consumer: BasicSourceMapConsumer | IndexedSourceMapConsumer = this.cache.has('sourceMapConsumer')
             ? this.cache.get('sourceMapConsumer')
@@ -102,7 +109,7 @@ class BrowserSourceStackManager extends GDB.SourceStackManagerWithCache {
                   });
               });
 
-        const { source, line, column } = consumer.originalPositionFor({
+        const { source, line, column, name } = consumer.originalPositionFor({
             line: position.line,
             column: position.col,
         });
@@ -114,6 +121,7 @@ class BrowserSourceStackManager extends GDB.SourceStackManagerWithCache {
                 col: column!,
             },
             filename: source!,
+            scope: name!,
         };
     }
 }
@@ -122,28 +130,84 @@ if (location.protocol.startsWith('file::')) {
     throw new Error('not supoort file protocol, please change your protocol');
 }
 
+function formatPath(origin: string, target: string) {
+    if (target.includes(pageCurrentOrigin)) return target;
+    const index = origin.indexOf(pageCurrentOrigin);
+
+    if (index === -1) return target;
+
+    const originPaths = origin
+        .slice(index + pageCurrentOrigin.length, origin.lastIndexOf('/'))
+        .split('/')
+        .filter(Boolean);
+
+    const targetPaths = target.split('/').filter(Boolean);
+
+    for (let i = 0; i < targetPaths.length; i++) {
+        switch (targetPaths[i]) {
+            case '..':
+                originPaths.pop();
+                break;
+            case '.':
+                break;
+            default:
+                originPaths.push(targetPaths[i]);
+                break;
+        }
+    }
+
+    if (!targetPaths.length) return pageCurrentOrigin;
+
+    return `${pageCurrentOrigin}/${originPaths.join('/')}`;
+}
+
 class BrowserStackAdapter extends GDB.StackAdapter {
     StackParser = BrowserStackParser;
 
     SourceStackManager = BrowserSourceStackManager;
 
+    private async tryDeepFindSourceMap(stack: GDB.StackLine) {
+        if (stack.type === 'null') return stack;
+
+        const manager = this.getManager(stack);
+
+        const source = await manager.translate(stack.position);
+
+        if (source.type !== 'real') {
+            return source;
+        }
+
+        Object.assign(stack, {
+            realFilename: formatPath(stack.realFilename, source.filename),
+        });
+
+        let lastSource = source;
+        while (true) {
+            const nextManager = this.getManager({ ...lastSource, realFilename: stack.realFilename, type: 'match' });
+            const newSource = await nextManager.translate({ ...lastSource.position });
+            if (newSource.type !== 'real') {
+                break;
+            }
+            if (!newSource.filename) {
+                break;
+            }
+            Object.assign(stack, {
+                realFilename: formatPath(stack.realFilename, newSource.filename),
+            });
+            lastSource = newSource;
+        }
+
+        return lastSource;
+    }
+
     async fetchStack(stack: string, offset: number): Promise<GDB.StackLine[]> {
         const stackParser = new this.StackParser(stack, offset);
 
-        const stacks = stackParser.parse();
+        const stacks = stackParser.parse().filter((item) => {
+            return (item.type === 'match' ? item.filename : item.from).indexOf('node_modules') === -1;
+        });
 
-        const realStackLines = await Promise.all(
-            stacks.map((stack) => {
-                if (stack.type === 'null') return stack;
-                if (!this.managerMapCache.has(stack.filename)) {
-                    this.managerMapCache.set(stack.filename, new BrowserSourceStackManager(stack));
-                }
-
-                const manager = this.managerMapCache.get(stack.filename)!;
-
-                return manager.translate(stack.position);
-            })
-        );
+        const realStackLines = await Promise.all(stacks.map((item) => this.tryDeepFindSourceMap(item)));
 
         const targetStacks: GDB.StackLine[] = stacks.map((item, index) => {
             if (item.type === 'null') {
@@ -151,14 +215,11 @@ class BrowserStackAdapter extends GDB.StackAdapter {
             }
             return {
                 ...item,
-                filename: (<GDB.RealSource>realStackLines[index]).filename,
                 position: (<GDB.RealSource>realStackLines[index]).position,
             };
         });
 
-        return targetStacks.filter((item) => {
-            return (item.type === 'match' ? item.filename : item.from).indexOf('node_modules') === -1;
-        });
+        return targetStacks;
     }
 
     format(stackLines: GDB.StackLine[]): string | undefined {
@@ -166,7 +227,7 @@ class BrowserStackAdapter extends GDB.StackAdapter {
             .map((item) => {
                 switch (item.type) {
                     case 'match':
-                        return `${item.scope} ${item.filename}:${item.position.line}:${item.position.col}`;
+                        return `${item.scope} ${item.realFilename}:${item.position.line}:${item.position.col}`;
                     case 'null':
                         return `${item.from}`;
                     default:
@@ -182,7 +243,7 @@ class BrowserStackAdapter extends GDB.StackAdapter {
  * 1. sourcemap 深度
  * 2. 路径恢复 `origin: aa/bb/cc/` `target: ../../../abc` ==> `location:xxx/abc`
  */
-const gdb = new GDB.default({
+const gdb = new Gdb({
     stackAdapter: new BrowserStackAdapter(),
 });
 

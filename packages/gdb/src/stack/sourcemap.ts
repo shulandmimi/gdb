@@ -1,6 +1,7 @@
 import { LineSource, Position, StackLineMatch } from './type';
 
 export abstract class SourceStackManager {
+    failed: boolean = false;
     constructor(public stackLine: StackLineMatch) {}
 
     // 获取 source map

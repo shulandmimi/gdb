@@ -8,6 +8,7 @@ export interface StackLineMatch {
     scope: string;
     filename: string;
     meta?: Record<string, any>;
+    realFilename: string;
 }
 
 export interface StackMatchWithPosition extends StackLineMatch {
@@ -25,6 +26,7 @@ export interface RealSource {
     type: 'real';
     filename: string;
     position: Position;
+    scope: string;
 }
 
 export type LineSource = RealSource | StackNullLine;

@@ -1,5 +1,5 @@
 import { SourceStackManagerWithCache, StackParser } from './stack';
-import { StackLine } from './stack/type';
+import { StackLine, StackMatchWithPosition } from './stack/type';
 
 export abstract class StackAdapter<
     Parser extends new (...arg: any) => StackParser = new (...arg: any) => StackParser,
@@ -9,6 +9,16 @@ export abstract class StackAdapter<
     abstract SourceStackManager: Manager;
 
     managerMapCache = new Map<string, InstanceType<Manager>>();
+
+    getManager(stack: StackMatchWithPosition) {
+        if (this.managerMapCache.has(stack.filename)) {
+            return this.managerMapCache.get(stack.filename)!;
+        }
+        const manager = new this.SourceStackManager(stack);
+
+        this.managerMapCache.set(stack.filename, manager as InstanceType<Manager>);
+        return manager;
+    }
 
     abstract fetchStack(stack: string, offset: number): Promise<StackLine[]>;
 
