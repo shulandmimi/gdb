@@ -37,7 +37,7 @@ class NodeSourceStackManager extends SourceStackManagerWithCache {
     async translate(position: Position): Promise<RealSource> {
         const sourcemap = await this.sourceMap();
 
-        if (!sourcemap) return { type: 'real', position, filename: this.stackLine.filename };
+        if (!sourcemap) return { type: 'real', scope: this.stackLine.scope, position, filename: this.stackLine.filename };
 
         const consumer: BasicSourceMapConsumer | IndexedSourceMapConsumer = this.cache.has('sourceMapConsumer')
             ? this.cache.get('sourceMapConsumer')
@@ -48,7 +48,7 @@ class NodeSourceStackManager extends SourceStackManagerWithCache {
                   });
               });
 
-        const { source, line, column } = consumer.originalPositionFor({
+        const { source, line, column, name } = consumer.originalPositionFor({
             line: position.line,
             column: position.col,
         });
@@ -59,7 +59,8 @@ class NodeSourceStackManager extends SourceStackManagerWithCache {
                 line: line!,
                 col: column!,
             },
-            filename: path.resolve(process.cwd(), source || ''),
+            filename: path.resolve(path.dirname(this.stackLine.filename), source ?? ''),
+            scope: name!,
         };
     }
 }
@@ -75,18 +76,6 @@ class NodeStackParser extends StackParser {
         this.rawStack = stack;
     }
 
-    private extractStack() {
-        const items = this.splitStack(new Error().stack!);
-    }
-
-    private splitStack(stack_str: string) {
-        const items = stack_str.split('\n');
-
-        items.shift();
-
-        return items;
-    }
-
     parse(): StackLine[] {
         const rawStack = this.rawStack;
         let stackLines = rawStack.split('\n');
@@ -100,8 +89,9 @@ class NodeStackParser extends StackParser {
                 type: 'null',
                 from: lineItem,
             };
+
             // 在某个作用域中执行时
-            if (/\(.*\)/.test(lineItem)) {
+            if (/^([a-zA-Z$_][\.\<\>a-zA-Z$_]*)\s\((.+):([0-9]+):([0-9]+)\)$/.test(lineItem)) {
                 const matchs = lineItem.match(/^([a-zA-Z$_][\.\<\>a-zA-Z$_]*)\s\((.+):([0-9]+):([0-9]+)\)$/);
 
                 if (!matchs) return nullMatch;
@@ -116,13 +106,14 @@ class NodeStackParser extends StackParser {
                         line: Number(line),
                         col: Number(col),
                     },
+                    realFilename: filename!,
                 } as StackMatchWithPosition;
-            } else {
+            } else if (/^(<[a-zA-Z]+>):([0-9]+):([0-9]+)$/.test(lineItem)) {
                 const matchs = lineItem.match(/^(<[a-zA-Z]+>):([0-9]+):([0-9]+)$/);
 
                 if (!matchs) return nullMatch;
 
-                const [filename, line, col] = matchs;
+                const [, filename, line, col] = matchs;
                 return {
                     type: 'match',
                     scope: '',
@@ -131,16 +122,32 @@ class NodeStackParser extends StackParser {
                         line: Number(line),
                         col: Number(col),
                     },
+                    realFilename: filename,
+                } as StackMatchWithPosition;
+            } else if (/^(.+):([0-9]+):([0-9]+)$/.test(lineItem)) {
+                const matchs = lineItem.match(/^(.+):([0-9]+):([0-9]+)$/);
+
+                if (!matchs) return nullMatch;
+
+                const [, filename, line, col] = matchs;
+
+                return {
+                    type: 'match',
+                    scope: '',
+                    filename,
+                    position: {
+                        line: Number(line),
+                        col: Number(col),
+                    },
+                    realFilename: filename,
                 } as StackMatchWithPosition;
             }
+
+            return nullMatch;
         });
 
-        return datas;
+        return datas.filter((item) => !(item.type === 'match' ? item.filename : item.from).includes('node:internal'));
     }
-
-    // format(): StackLineWithPosition[] {
-    //     throw new Error('Method not implemented.');
-    // }
 }
 
 class NodeStackAdapter extends StackAdapter<typeof NodeStackParser, typeof NodeSourceStackManager> {
@@ -193,14 +200,17 @@ const gdb = new Gdb({
     stackAdapter: new NodeStackAdapter(),
 }).extend({
     format(stackLines) {
-        const firstLine = stackLines[0];
-        switch (firstLine.type) {
-            case 'match':
-                return `at ${firstLine.filename}:${firstLine.position.line}:${firstLine.position.col}`;
-            case 'null':
-            default:
-                return '';
-        }
+        return stackLines
+            .map((stackLine) => {
+                switch (stackLine.type) {
+                    case 'match':
+                        return `at ${stackLine.filename}:${stackLine.position.line ?? ''}:${stackLine.position.col ?? ''}`;
+                    case 'null':
+                    default:
+                        return `at ${stackLine.from}`;
+                }
+            })
+            .join('\n');
     },
 });
 

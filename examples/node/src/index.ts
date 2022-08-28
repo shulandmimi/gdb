@@ -1,4 +1,5 @@
 import gdb from '@gdb/node';
+import delay from './utils/delay';
 
 gdb('hello world');
 
@@ -28,3 +29,14 @@ function setTimeoutScope() {
 }
 
 setTimeoutScope();
+
+async function main() {
+    await delay(2000);
+
+    await new Promise(async (resolve) => {
+        await delay(2000);
+        gdb('hello async/await');
+    });
+}
+
+main();

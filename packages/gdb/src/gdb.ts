@@ -52,7 +52,6 @@ const Gdb = (function wrapper() {
 
         constructor(options: Partial<GDBOptions>) {
             Object.assign(this.options, options);
-
             if (this.options.stackAdapter) this.stackAdapter = this.options.stackAdapter;
         }
 
