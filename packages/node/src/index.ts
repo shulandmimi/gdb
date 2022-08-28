@@ -206,6 +206,6 @@ const gdb = new Gdb({
 
 const log = gdb.log.bind(gdb);
 
-export const extend = gdb.extend;
+export const extend = gdb.extend.bind(gdb);
 
 export default log;
