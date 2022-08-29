@@ -227,9 +227,9 @@ class BrowserStackAdapter extends GDB.StackAdapter {
             .map((item) => {
                 switch (item.type) {
                     case 'match':
-                        return `${item.scope} ${item.realFilename}:${item.position.line}:${item.position.col}`;
+                        return `at ${item.scope} (${item.realFilename}:${item.position.line}:${item.position.col})`;
                     case 'null':
-                        return `${item.from}`;
+                        return `at ${item.from}`;
                     default:
                         return '';
                 }

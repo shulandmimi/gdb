@@ -70,7 +70,11 @@ const Gdb = (function wrapper() {
                     if (this.options.format) {
                         console.log(this.options.format(res));
                     } else {
-                        console.log(this.stackAdapter.format(res));
+                        // 伪装成 Error，使得 file 缩短
+                        const error = new Error();
+                        // @ts-ignore
+                        error.stack = 'Error: \n' + this.stackAdapter.format(res);
+                        console.log(error);
                     }
                     console.log();
                 });
