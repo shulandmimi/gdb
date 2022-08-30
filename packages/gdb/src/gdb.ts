@@ -56,7 +56,7 @@ const Gdb = (function wrapper() {
         }
 
         log(...msgs: any[]) {
-            const error = new Error().stack!;
+            const error = new Error().stack?.trim()!;
 
             if (offset === -1) {
                 offset = error.split('\n').findIndex((item) => item.indexOf(wrapper.name) !== -1) - 1;

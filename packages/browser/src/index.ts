@@ -1,6 +1,7 @@
 import Gdb from 'gdb';
 import * as GDB from 'gdb';
 import { BasicSourceMapConsumer, IndexedSourceMapConsumer, SourceMapConsumer } from 'source-map';
+import './runtime/trace';
 
 // @ts-ignore
 SourceMapConsumer.initialize({
@@ -29,6 +30,7 @@ class BrowserStackParser extends GDB.StackParser {
                 type: 'null',
                 from: lineItem,
             };
+
             // 在某个作用域中执行时
             if (/\(.*\)/.test(lineItem)) {
                 const matchs = lineItem.match(/^([a-zA-Z$_][\.\<\>a-zA-Z$_]*)\s\((.+):([0-9]+):([0-9]+)\)$/);
@@ -128,6 +130,19 @@ class BrowserSourceStackManager extends GDB.SourceStackManagerWithCache {
 
 if (location.protocol.startsWith('file::')) {
     throw new Error('not supoort file protocol, please change your protocol');
+}
+
+function replace_website_origin(filename: string) {
+    if (filename.startsWith(origin)) {
+        return filename.slice(origin.length);
+    }
+    return filename;
+}
+
+function get_filename_from_path(filename: string) {
+    filename = replace_website_origin(filename);
+    const names = filename.split('/');
+    return names[names.length - 1];
 }
 
 function formatPath(origin: string, target: string) {
