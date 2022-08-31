@@ -1,3 +1,4 @@
+import '@gdb/browser/dist/mjs/runtime/trace';
 import gdb from '@gdb/browser';
 
 function abc() {
@@ -17,11 +18,30 @@ function bac_1() {
 function bac() {
     gdb('hello world');
 
-    // console.log(new Error());
+    console.log(new Error());
     // bac_1();
 }
 
 abc();
+
+// function run() {
+//     gdb('123123');
+// }
+
+// run();
+
+// function main() {
+//     function wrap() {
+//         new Promise((resolve) => {
+//             resolve(123);
+//         }).then(() => {
+//             console.log(new Error('哈哈哈').stack);
+//         });
+//     }
+//     wrap();
+// }
+
+// main();
 
 // setInterval(() => {
 //   abc();

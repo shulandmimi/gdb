@@ -197,7 +197,9 @@ class BrowserStackAdapter extends GDB.StackAdapter {
         });
 
         let lastSource = source;
-        while (true) {
+        let MAX_DEEP = 5;
+        let deep = 0;
+        while (true && deep < MAX_DEEP) {
             const nextManager = this.getManager({ ...lastSource, realFilename: stack.realFilename, type: 'match' });
             const newSource = await nextManager.translate({ ...lastSource.position });
             if (newSource.type !== 'real') {
@@ -206,6 +208,7 @@ class BrowserStackAdapter extends GDB.StackAdapter {
             if (!newSource.filename) {
                 break;
             }
+            deep++;
             Object.assign(stack, {
                 realFilename: formatPath(stack.realFilename, newSource.filename),
             });
