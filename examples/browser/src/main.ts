@@ -19,7 +19,7 @@ function bac() {
     gdb('hello world');
 
     console.log(new Error());
-    // bac_1();
+    bac_1();
 }
 
 abc();
@@ -30,21 +30,23 @@ abc();
 
 // run();
 
-// function main() {
-//     function wrap() {
-//         new Promise((resolve) => {
-//             resolve(123);
-//         }).then(() => {
-//             console.log(new Error('哈哈哈').stack);
-//         });
-//     }
-//     wrap();
-// }
+function main() {
+    function wrap() {
+        new Promise((resolve) => {
+            console.log(1);
+            resolve(123);
+            console.log(2);
+        }).then(() => {
+            console.log(new Error().stack);
+        });
+    }
+    wrap();
+}
 
 // main();
 
-// setInterval(() => {
-//   abc();
-// }, 5000);
+// setTimeout(() => {
+//     main();
+// }, 1000);
 
 export {};

@@ -6,6 +6,16 @@ let global_error: Error | undefined;
 
 const website_origin = location.origin;
 
+function modify_scope_stack_line(errors: string[], scope: string) {
+    const index = errors[errors.length - 1].indexOf('at');
+
+    const [prefix, suffix] = [errors[errors.length - 1].slice(0, index + 2), errors[errors.length - 1].slice(index + 2)];
+
+    errors[errors.length - 1] = [prefix, scope, `(${suffix})`].join(' ');
+
+    return errors;
+}
+
 function register_call(object: { [key: string]: any }, key: string, idx: number) {
     const target: Function = object[key];
 
@@ -13,7 +23,7 @@ function register_call(object: { [key: string]: any }, key: string, idx: number)
         const origin_handle = arg[idx];
         const error = new Error();
 
-        error.stack = error_to_string(trim_prev_error(split_error(error.stack), 2));
+        error.stack = error_to_string(trim_prev_error(modify_scope_stack_line(split_error(error.stack), key), 2));
 
         error.__prev = global_error;
 
@@ -60,7 +70,7 @@ function trim_error_stack(error: string[]) {
 }
 
 function match_error_in_origin_path(error: string[]) {
-    const index = error.findIndex((line) => new RegExp(`^\\s*at\\s${location.origin}`).test(line));
+    const index = error.findIndex((line) => /^(at setTimeout)/.test(line));
     return index === -1 ? error.length : index;
 }
 
@@ -120,16 +130,19 @@ function mock_promise() {
                     else offset += 1;
                     return;
                 }
+                const error = new Error();
+                error.stack = error_to_string(trim_prev_error(split_error(error.stack), offset));
+                const self = this;
                 callback(
                     (...arg) => {
-                        this.error = new Error();
-                        this.error.stack = error_to_string(trim_prev_error(split_error(this.error.stack), 2 + offset));
-                        this.error.__prev = global_error;
+                        self.error = new Error();
+                        self.error.stack = trim_prev_error(split_error(self.error.stack), 2)[0];
+                        self.error.stack += '\n' + error.stack;
                         resolve(...arg);
                     },
                     (...arg) => {
                         this.error = new Error();
-                        this.error.stack = error_to_string(trim_prev_error(split_error(this.error.stack), 2 + offset));
+                        this.error.stack = error_to_string(trim_prev_error(split_error(this.error.stack), 0));
                         this.error.__prev = global_error;
                         reject(...arg);
                     }
@@ -138,14 +151,16 @@ function mock_promise() {
         }
 
         then(resolve: (...arg: any) => void, reject: (...arg: any[]) => void) {
-            const error = new Error();
-            error.__prev = this.error;
-            const stack = trim_prev_error(split_error(error.stack), 2);
-            error.stack = error_to_string(trim_last_error(stack, stack.length - 1));
+            // const error = new Error();
+            // const stack = trim_prev_error(split_error(error.stack), 2);
+            // error.stack = error_to_string(trim_last_error(stack, 2));
+            // error.__prev = this.error;
 
-            // const self = this;
+            // console.log(error.stack);
+            const self = this;
+
             const result = this.p.then(function (...arg) {
-                global_error = error;
+                global_error = self.error;
                 try {
                     resolve(...arg);
                 } finally {
