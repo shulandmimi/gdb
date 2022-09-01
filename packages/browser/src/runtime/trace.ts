@@ -23,7 +23,7 @@ function register_call(object: { [key: string]: any }, key: string, idx: number)
         const origin_handle = arg[idx];
         const error = new Error();
 
-        error.stack = error_to_string(trim_prev_error(modify_scope_stack_line(split_error(error.stack), key), 2));
+        error.stack = error_to_string(trim_prev_error(split_error(error.stack), 2));
 
         error.__prev = global_error;
 
@@ -94,11 +94,23 @@ function error_to_string(error: string[]) {
     return error.join('\n');
 }
 
+function pad_start_space_to_error(error?: string) {
+    if (!error) return '';
+    let i = 0;
+    for (; i < 4; i++) {
+        if (error[i] !== ' ') {
+            break;
+        }
+    }
+
+    return ''.padStart(4 - i, ' ') + error;
+}
+
 Error.prepareStackTrace = function (err, stack) {
     if (!err.__prev) {
         let e: Error | undefined = global_error;
         while (e) {
-            err.stack = `${trim_error_stack(split_error(err.stack))}\n${e.stack?.trim()}`;
+            err.stack = `${error_to_string(trim_last_error(split_error(err.stack), 1))}\n${pad_start_space_to_error(e.stack?.trim())}`;
             e = e.__prev;
         }
     }

@@ -24,6 +24,16 @@ function bac() {
 
 abc();
 
+// function setTimeoutWrapper() {
+// setTimeout(() => {
+// console.log(new Error());
+// });
+// }
+
+// setTimeoutWrapper();
+
+// abc();
+//
 // function run() {
 //     gdb('123123');
 // }
@@ -43,7 +53,7 @@ function main() {
     wrap();
 }
 
-// main();
+main();
 
 // setTimeout(() => {
 //     main();
